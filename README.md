@@ -99,7 +99,7 @@ Deploy the application, configure environment variables securely, and add loggin
 Clone the repository and navigate to the project directory:
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/chetanravish/GKV_Bot.git
 cd knowly
 ```
 
