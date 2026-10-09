@@ -5,13 +5,24 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "seed": "ts-node ./scripts/loadDb.ts",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@datastax/astra-db-ts": "^2.3.0",
+    "@google/genai": "^2.28.0",
+    "@langchain/core": "^1.2.17",
+    "@langchain/openai": "^1.6.2",
+    "@langchain/textsplitters": "^1.0.2",
+    "dotenv": "^16.4.5",
+    "langchain": "^1.5.15",
     "next": "16.4.0",
+    "openai": "^7.28.0",
+    "puppeteer": "^25.12.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
