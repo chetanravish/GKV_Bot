@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "seed1":"ts-node ./scripts/testRetrieval.ts",
     "seed": "ts-node ./scripts/loadDb.ts",
+    "answer": "ts-node ./scripts/answerQuestions.ts",
     "start": "next start",
     "lint": "eslint"
   },

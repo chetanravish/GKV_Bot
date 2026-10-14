@@ -100,14 +100,84 @@ async function loadData() {
                     timeout: 30000,
                 })
 
-                const pageText = await page.evaluate(
-                    () => document.body.innerText
-                )
 
-                if (pageText.trim()) {
+                const pageText = await page.evaluate(() => {
+                    const body = document.body.cloneNode(true) as HTMLElement;
+
+                    // Remove standard page elements that are not useful
+                    // as knowledge sources.
+                    body
+                        .querySelectorAll(
+                            [
+                                "script",
+                                "style",
+                                "form",
+                                "input",
+                                "textarea",
+                                "select",
+                                "button",
+                                "noscript",
+                                "nav",
+                                "header",
+                                "footer",
+                                "aside",
+                                '[role="navigation"]',
+                                '[aria-label="Breadcrumb"]',
+                                ".elementor-form",
+                                ".site-header",
+                                ".site-footer",
+                                ".main-navigation",
+                                ".elementor-location-header",
+                                ".elementor-location-footer",
+                                ".sharedaddy",
+                                ".shared-counts",
+                                ".addtoany_share_save_container",
+                                ".wp-social-sharing",
+                                ".wpcf7-response-output",
+                                ".wpcf7-not-valid-tip",
+                                ".wpcf7-form",
+                                ".wpcf7",
+                                ".elementor-widget-share-buttons",
+                                "#masthead",
+                                "#colophon",
+                            ].join(",")
+                        )
+                        .forEach((element) => element.remove());
+
+                    return body.innerText
+                        .replace(/\u00a0/g, " ")
+                        .replace(/[ \t]+\n/g, "\n")
+                        .replace(/\n{3,}/g, "\n\n")
+                        .trim();
+                });
+
+                const navigationLines = new Set([
+                    "Merit List",
+                    "Placement Cell",
+                    "Tenders",
+                    "Fee Payment",
+                    "Contact Us",
+                    "Emergency Contacts",
+                    "Quick Enquiry",
+                    "MENU",
+                ]);
+
+                const cleanedText = pageText
+                    .split(/\r?\n/)
+                    .filter((line) => !navigationLines.has(line.trim()))
+                    .join("\n")
+                    .replace(/[ \t]+\n/g, "\n")
+                    .replace(/\n{3,}/g, "\n\n")
+                    .trim();
+
+
+                console.log(`Original text length: ${pageText.length}`);
+                console.log(`Cleaned text length: ${cleanedText.length}`);
+                console.log("Cleaned preview:", cleanedText.slice(0, 700));
+                if (cleanedText.trim()) {
                     scrapedPages.push({
                         url,
-                        text: pageText,
+                        text: cleanedText,
                     })
                 } else {
                     console.warn(`No text extracted from: ${url}`)
@@ -176,12 +246,72 @@ async function loadData() {
         }
 
         console.log(`Generated embeddings for ${documents.length} chunks`)
+
         if (documents.length > 0) {
-    const result = await collection.insertMany(documents)
-    console.log(`Successfully saved ${result.insertedCount} documents to Astra DB`)
-} else {
-    console.warn("No documents to save.")
-}
+            let saved = 0;
+
+            // Process in small batches to avoid sending too many
+            // requests to Astra DB at once.
+            const batchSize = 5;
+
+            for (let i = 0; i < documents.length; i += batchSize) {
+                const batch = documents.slice(i, i + batchSize);
+
+                const results = await Promise.all(
+                    batch.map((document) =>
+                        collection.updateOne(
+                            { _id: document._id },
+                            {
+                                $set: {
+                                    text: document.text,
+                                    url: document.url,
+                                    $vector: document.$vector,
+                                },
+                            },
+                            { upsert: true }
+                        )
+                    )
+                );
+
+                saved += results.length;
+                console.log(`Processed ${saved}/${documents.length} documents`);
+            }
+
+            console.log(
+                `Successfully upserted ${saved} documents into Astra DB`
+            );
+
+            const currentIds = new Set(
+                documents.map((document) => document._id)
+            );
+
+            const refreshedUrls = [
+                ...new Set(documents.map((document) => document.url)),
+            ];
+
+            let removed = 0;
+
+            for (const url of refreshedUrls) {
+                const existingDocs = await collection.find({ url }).toArray();
+
+                const staleDocs = existingDocs.filter(
+                    (doc) =>
+                        typeof doc._id === "string" &&
+                        !currentIds.has(doc._id)
+                );
+
+                for (const doc of staleDocs) {
+                    await collection.deleteOne({ _id: doc._id });
+                    removed++;
+                }
+            }
+
+            console.log(`Removed ${removed} obsolete documents`);
+
+        } else {
+            console.warn("No documents to save.");
+        }
+
 
     } finally {
         await browser.close()
